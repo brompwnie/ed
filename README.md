@@ -36,5 +36,18 @@ Usage of ./ed:
  
  ```
  
+ # Testing
+Ed can be tested with Docker, WARNING, mouting Docker.sock into containers is a very bad idea but if you want to test Ed, you can with the following:
+
+```
+docker-compose build && docker-compose up
+...
+worker_1_fd52bdee04ce | [+] Hunt 'dem Socks
+worker_1_fd52bdee04ce | [+] Hunting Down UNIX Domain Sockets from: /
+worker_1_fd52bdee04ce | [*] Valid Socket: /run/docker.sock
+ed_worker_1_fd52bdee04ce exited with code 0
+
+```
+ 
  # License
  Ed is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (http://creativecommons.org/licenses/by-nc-sa/4.0).
