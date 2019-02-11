@@ -36,6 +36,13 @@ Usage of ./ed:
  
  ```
  
+ And now that you have found an exposed Docker socket, you could go ahead and issue commands to the Docker daemon using CURL:
+ 
+ ```
+ root@70a7cf3d4f93:/app# curl --unix-socket  /var/run/docker.sock http:/docker/info
+ ..l00t
+ ```
+ 
  # Testing
 Ed can be tested with Docker, WARNING, mouting Docker.sock into containers is a very bad idea but if you want to test Ed, you can with the following:
 
