@@ -1,0 +1,13 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "2xcr/mhxBFlDjpxe/Mc2Wb4RGR8=",
+			"path": "github.com/tv42/httpunix",
+			"revision": "b75d8614f926c077e48d85f1f8f7885b758c6225",
+			"revisionTime": "2015-04-27T01:28:21Z"
+		}
+	],
+	"rootPath": "github.com/brompwnie/ed"
+}
