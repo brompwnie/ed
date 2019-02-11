@@ -5,3 +5,5 @@ services:
     build: .
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /app
+    command: ./main -socket=true -path="/"
