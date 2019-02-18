@@ -61,6 +61,8 @@ func main() {
 			fmt.Println("[*] Valid Docker Socket: " + element)
 		}
 	}
+
+	fmt.Println("[+] Finished Scanning")
 }
 
 func getDockerEnabledSockets(socks []string) []string {
