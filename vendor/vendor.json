@@ -3,10 +3,22 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "bRb1fwA3m0kS0czyPQQ4bKTnChM=",
+			"path": "github.com/kr/pty",
+			"revision": "7dc38fb350b1d71383eed149e73acb7bae231ddb",
+			"revisionTime": "2019-01-31T01:10:33Z"
+		},
+		{
 			"checksumSHA1": "2xcr/mhxBFlDjpxe/Mc2Wb4RGR8=",
 			"path": "github.com/tv42/httpunix",
 			"revision": "b75d8614f926c077e48d85f1f8f7885b758c6225",
 			"revisionTime": "2015-04-27T01:28:21Z"
+		},
+		{
+			"checksumSHA1": "BGm8lKZmvJbf/YOJLeL1rw2WVjA=",
+			"path": "golang.org/x/crypto/ssh/terminal",
+			"revision": "c126467f60eb25f8f27e5a981f32a87e3965053f",
+			"revisionTime": "2018-07-23T15:26:11Z"
 		}
 	],
 	"rootPath": "github.com/brompwnie/ed"
