@@ -2,8 +2,10 @@ version: '3'
 
 services:
   worker:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     working_dir: /app
-    command: ./main -socket=true -path="/"
+    command: ./main -socket=true -path="/" -autopwn=true

