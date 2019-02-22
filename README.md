@@ -5,7 +5,7 @@ Ed is a tool used to identify and exploit accessible UNIX Domain Sockets
 Ed is a binary to help you find and exploit accessible UNIX domain sockets on a container or host. This is useful for hunting Docker.sock when it has been mounted to a non-default location and or not mounted with the default name i.e  "/var/run/Docker.sock".
 
 # Why ed?
-Finding exposed UNIX domain sockets, especially Docker.sock, is very useful ;) Ed can be useful in a DevOps process to ensure that Containers do not have any unnecessarily exposed sockets.
+Finding exposed UNIX domain sockets, especially Docker.sock, is very useful ;) Ed can be useful in a DevOps process to ensure that containers do not have any unnecessarily exposed sockets or it can be used to exploit exposed sockets to achieve container breakout.
 
 # Usage
 Ed can be used to look for plain 'ol UNIX domain sockets, UNIX domain sockets that respond to HTTP requests or UNIX domain sockets that behave like Docker.sock. Ed by default searches from the CWD. To use Ed, get the binary on the host and use the following options:
