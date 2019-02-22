@@ -82,6 +82,10 @@ worker_1_fd52bdee04ce | [*] Valid Socket: /run/docker.sock
 ed_worker_1_fd52bdee04ce exited with code 0
 
 ```
+
+# Demo
+
+[![asciicast](https://asciinema.org/a/oUkKmXvOGrT9QVbw8iQlbUxpA.png)](https://asciinema.org/a/oUkKmXvOGrT9QVbw8iQlbUxpA)
  
  # License
  Ed is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (http://creativecommons.org/licenses/by-nc-sa/4.0).
